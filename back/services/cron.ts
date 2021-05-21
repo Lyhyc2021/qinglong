@@ -8,6 +8,7 @@ import fs from 'fs';
 import cron_parser from 'cron-parser';
 import { getFileContentByName } from '../config/util';
 import PQueue from 'p-queue';
+import kill from 'tree-kill';
 
 @Service()
 export default class CronService {
@@ -150,19 +151,26 @@ export default class CronService {
 
   public async stop(ids: string[]) {
     return new Promise((resolve: any) => {
-      this.cronDb.find({ _id: { $in: ids } }).exec((err, docs: Crontab[]) => {
-        this.cronDb.update(
-          { _id: { $in: ids } },
-          { $set: { status: CrontabStatus.idle }, $unset: { pid: true } },
-        );
-        const pids = docs
-          .map((x) => x.pid)
-          .filter((x) => !!x)
-          .join('\n');
-        console.log(pids);
-        exec(`echo - e "${pids}" | xargs kill - 9`, (err) => {
+      this.cronDb
+        .find({ _id: { $in: ids } })
+        .exec(async (err, docs: Crontab[]) => {
+          this.cronDb.update(
+            { _id: { $in: ids } },
+            { $set: { status: CrontabStatus.idle }, $unset: { pid: true } },
+          );
+          const pids = docs.map((x) => x.pid).filter((x) => !!x);
+          for (const pid of pids) {
+            await this.killPid(pid);
+          }
           resolve();
         });
+    });
+  }
+
+  private async killPid(id: number) {
+    return new Promise((resolve: any) => {
+      kill(id, (err) => {
+        resolve();
       });
     });
   }
@@ -229,6 +237,31 @@ export default class CronService {
         );
         fs.appendFileSync(logFile, `\n执行结束...`);
         resolve(code);
+      });
+
+      // 程序停止信号
+      process.on('SIGHUP', function () {
+        console.log('SIGHUP');
+      });
+
+      // kill 默认参数信号
+      process.on('SIGTERM', function () {
+        console.log('SIGTERM');
+      });
+
+      // Ctrl + c 信号
+      process.on('SIGINT', function () {
+        console.log('SIGHUP');
+      });
+
+      // 退出事件
+      process.on('exit', function () {
+        console.log('exit');
+      });
+
+      // 未捕获异常
+      process.on('uncaughtException', function () {
+        console.log('exit');
       });
     });
   }
