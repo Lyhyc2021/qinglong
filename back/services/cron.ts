@@ -239,12 +239,7 @@ export default class CronService {
         resolve();
       });
 
-      // Ctrl + c 信号
       process.on('SIGINT', function () {
-        this.cronDb.update(
-          { _id },
-          { $set: { status: CrontabStatus.idle }, $unset: { pid: true } },
-        );
         fs.appendFileSync(logFile, `\n执行结束...`);
         resolve();
       });
