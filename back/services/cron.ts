@@ -176,10 +176,10 @@ export default class CronService {
   }
 
   private async runSingle(id: string): Promise<number> {
-    return new Promise(async (resolve) => {
+    return new Promise(async (resolve: any) => {
       const cron = await this.get(id);
       if (cron.status !== CrontabStatus.queued) {
-        resolve(0);
+        resolve();
         return;
       }
 
@@ -236,32 +236,17 @@ export default class CronService {
           { $set: { status: CrontabStatus.idle }, $unset: { pid: true } },
         );
         fs.appendFileSync(logFile, `\n执行结束...`);
-        resolve(code);
-      });
-
-      // 程序停止信号
-      process.on('SIGHUP', function () {
-        console.log('SIGHUP');
-      });
-
-      // kill 默认参数信号
-      process.on('SIGTERM', function () {
-        console.log('SIGTERM');
+        resolve();
       });
 
       // Ctrl + c 信号
       process.on('SIGINT', function () {
-        console.log('SIGHUP');
-      });
-
-      // 退出事件
-      process.on('exit', function () {
-        console.log('exit');
-      });
-
-      // 未捕获异常
-      process.on('uncaughtException', function () {
-        console.log('exit');
+        this.cronDb.update(
+          { _id },
+          { $set: { status: CrontabStatus.idle }, $unset: { pid: true } },
+        );
+        fs.appendFileSync(logFile, `\n执行结束...`);
+        resolve();
       });
     });
   }
